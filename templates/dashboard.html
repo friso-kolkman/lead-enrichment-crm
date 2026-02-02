@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Dashboard - Lead Enrichment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        .tier-high_touch { background-color: #10b981; }
+        .tier-standard { background-color: #f59e0b; }
+        .tier-nurture { background-color: #6b7280; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-3">
+                <div class="flex items-center space-x-8">
+                    <h1 class="text-xl font-bold text-blue-600">CRM</h1>
+                    <div class="flex space-x-1">
+                        <a href="/" class="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600">Dashboard</a>
+                        <a href="/leads" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Leads</a>
+                        <a href="/campaigns" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Campaigns</a>
+                        <a href="/analytics" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Analytics</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600">Budget: <span class="font-semibold {% if budget_status.percentage_used > 80 %}text-red-600{% elif budget_status.percentage_used > 50 %}text-yellow-600{% else %}text-green-600{% endif %}">${{ "%.0f"|format(budget_status.spent_this_month) }}</span> / ${{ "%.0f"|format(budget_status.monthly_budget) }}</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <!-- Total Leads -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-sm font-medium text-gray-500">Total Leads</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ pipeline_status.total_leads }}</p>
+            </div>
+
+            <!-- Budget Used -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-sm font-medium text-gray-500">Budget Used</h3>
+                <p class="text-2xl font-bold {% if budget_status.percentage_used > 80 %}text-red-600{% elif budget_status.percentage_used > 50 %}text-yellow-600{% else %}text-green-600{% endif %}">
+                    {{ "%.1f"|format(budget_status.percentage_used) }}%
+                </p>
+                <p class="text-xs text-gray-400">${{ "%.2f"|format(budget_status.spent_this_month) }} / ${{ "%.2f"|format(budget_status.monthly_budget) }}</p>
+            </div>
+
+            <!-- Enrichment Progress -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-sm font-medium text-gray-500">Enrichment Progress</h3>
+                <p class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(pipeline_status.enrichment_progress) }}%</p>
+                <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                    <div class="bg-blue-600 h-2 rounded-full" style="width: {{ pipeline_status.enrichment_progress }}%"></div>
+                </div>
+            </div>
+
+            <!-- Scoring Progress -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-sm font-medium text-gray-500">Scoring Progress</h3>
+                <p class="text-2xl font-bold text-purple-600">{{ "%.1f"|format(pipeline_status.scoring_progress) }}%</p>
+                <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                    <div class="bg-purple-600 h-2 rounded-full" style="width: {{ pipeline_status.scoring_progress }}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Lead Status Breakdown -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Lead Status</h3>
+                <div class="space-y-2">
+                    {% for status, count in pipeline_status.by_status.items() %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">{{ status }}</span>
+                        <span class="text-sm font-medium text-gray-900">{{ count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Lead Tier Breakdown -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Lead Tiers</h3>
+                <div class="space-y-3">
+                    {% for tier, count in pipeline_status.by_tier.items() %}
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <span class="w-3 h-3 rounded-full tier-{{ tier }} mr-2"></span>
+                            <span class="text-sm text-gray-600">{{ tier }}</span>
+                        </div>
+                        <span class="text-sm font-medium text-gray-900">{{ count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Budget Breakdown -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Cost by Provider</h3>
+                <div class="space-y-2">
+                    {% for provider, cost in budget_status.breakdown_by_provider.items() %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">{{ provider }}</span>
+                        <span class="text-sm font-medium text-gray-900">${{ "%.2f"|format(cost) }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Leads Table -->
+        <div class="mt-6 bg-white rounded-lg shadow">
+            <div class="px-4 py-3 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800">Recent Leads</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tier</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for lead in recent_leads %}
+                        {% set company = companies.get(lead.company_id) %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">
+                                    {{ company.name if company and company.name else company.domain if company else 'Unknown' }}
+                                </div>
+                                {% if company %}
+                                <div class="text-xs text-gray-500">{{ company.domain }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="text-sm font-medium {% if lead.total_score and lead.total_score >= 80 %}text-green-600{% elif lead.total_score and lead.total_score >= 50 %}text-yellow-600{% else %}text-gray-600{% endif %}">
+                                    {{ lead.total_score if lead.total_score else '-' }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                {% if lead.tier %}
+                                <span class="px-2 py-1 text-xs rounded-full text-white tier-{{ lead.tier.value }}">
+                                    {{ lead.tier.value }}
+                                </span>
+                                {% else %}
+                                <span class="text-xs text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="text-sm text-gray-600">{{ lead.status.value if lead.status else '-' }}</span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="text-sm text-gray-600">{{ company.industry if company and company.industry else '-' }}</span>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-gray-500">
+                                No leads yet. Import some leads to get started.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="mt-6 bg-white rounded-lg shadow p-4">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
+            <div class="flex flex-wrap gap-3">
+                <button
+                    hx-post="/api/pipeline/run?start_stage=1&end_stage=5&limit=100"
+                    hx-swap="none"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    Run Enrichment (1-5)
+                </button>
+                <button
+                    hx-post="/api/pipeline/run?start_stage=6&end_stage=7&limit=50"
+                    hx-swap="none"
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                    Run AI Research (6-7)
+                </button>
+                <button
+                    hx-post="/api/pipeline/run?start_stage=8&end_stage=8&limit=100"
+                    hx-swap="none"
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                    Sync to CRM (8)
+                </button>
+                <a
+                    href="/api/leads?limit=500"
+                    target="_blank"
+                    class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                    Export Leads (JSON)
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <footer class="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
+        Lead Enrichment Pipeline v1.0
+    </footer>
+</body>
+</html>

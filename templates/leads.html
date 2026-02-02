@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads - CRM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        .tier-high_touch { background-color: #10b981; }
+        .tier-standard { background-color: #f59e0b; }
+        .tier-nurture { background-color: #6b7280; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="{ showFilters: false }">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-3">
+                <div class="flex items-center space-x-8">
+                    <h1 class="text-xl font-bold text-blue-600">CRM</h1>
+                    <div class="flex space-x-1">
+                        <a href="/" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Dashboard</a>
+                        <a href="/leads" class="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600">Leads</a>
+                        <a href="/campaigns" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Campaigns</a>
+                        <a href="/analytics" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Analytics</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Leads</h2>
+                <p class="text-gray-600 mt-1">{{ total_count }} total leads</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showFilters = !showFilters" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                    </svg>
+                    <span>Filters</span>
+                </button>
+                <a href="/api/leads?limit=500" target="_blank" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Export</a>
+            </div>
+        </div>
+
+        <!-- Filters Panel -->
+        <div x-show="showFilters" x-cloak class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+            <form method="get" action="/leads" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select name="status" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        <option value="">All Statuses</option>
+                        <option value="NEW" {% if selected_status == 'NEW' %}selected{% endif %}>New</option>
+                        <option value="ENRICHING" {% if selected_status == 'ENRICHING' %}selected{% endif %}>Enriching</option>
+                        <option value="ENRICHED" {% if selected_status == 'ENRICHED' %}selected{% endif %}>Enriched</option>
+                        <option value="SCORED" {% if selected_status == 'SCORED' %}selected{% endif %}>Scored</option>
+                        <option value="RESEARCHED" {% if selected_status == 'RESEARCHED' %}selected{% endif %}>Researched</option>
+                        <option value="READY" {% if selected_status == 'READY' %}selected{% endif %}>Ready</option>
+                        <option value="SYNCED" {% if selected_status == 'SYNCED' %}selected{% endif %}>Synced</option>
+                        <option value="CONTACTED" {% if selected_status == 'CONTACTED' %}selected{% endif %}>Contacted</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tier</label>
+                    <select name="tier" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        <option value="">All Tiers</option>
+                        <option value="high_touch" {% if selected_tier == 'high_touch' %}selected{% endif %}>High Touch</option>
+                        <option value="standard" {% if selected_tier == 'standard' %}selected{% endif %}>Standard</option>
+                        <option value="nurture" {% if selected_tier == 'nurture' %}selected{% endif %}>Nurture</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Min Score</label>
+                    <input type="number" name="min_score" value="{{ min_score or '' }}" placeholder="0" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Apply Filters</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            {% for status, count in status_counts.items() %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 class="text-xs font-medium text-gray-500 uppercase">{{ status }}</h3>
+                <p class="text-2xl font-bold text-gray-900 mt-1">{{ count }}</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Leads Table -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Industry</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for lead in leads %}
+                        {% set company = companies.get(lead.company_id) %}
+                        {% set contact = contacts.get(lead.contact_id) if lead.contact_id else None %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ company.name if company and company.name else company.domain if company else 'Unknown' }}
+                                        </div>
+                                        {% if company %}
+                                        <div class="text-xs text-gray-500">{{ company.domain }}</div>
+                                        {% if company.employee_range %}
+                                        <div class="text-xs text-gray-400">{{ company.employee_range }} employees</div>
+                                        {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                {% if contact %}
+                                <div class="text-sm font-medium text-gray-900">{{ contact.full_name or contact.email or '-' }}</div>
+                                {% if contact.title %}
+                                <div class="text-xs text-gray-500">{{ contact.title }}</div>
+                                {% endif %}
+                                {% if contact.email %}
+                                <div class="text-xs text-gray-500">{{ contact.email }}</div>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-sm text-gray-400">No contact</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                {% if lead.total_score %}
+                                <div class="flex items-center">
+                                    <span class="text-lg font-bold {% if lead.total_score >= 80 %}text-green-600{% elif lead.total_score >= 50 %}text-yellow-600{% else %}text-gray-600{% endif %}">
+                                        {{ lead.total_score }}
+                                    </span>
+                                    <span class="text-xs text-gray-400 ml-1">/100</span>
+                                </div>
+                                {% else %}
+                                <span class="text-sm text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                {% if lead.tier %}
+                                <span class="px-2 py-1 text-xs font-medium rounded-full text-white tier-{{ lead.tier.value }}">
+                                    {{ lead.tier.value.replace('_', ' ').title() }}
+                                </span>
+                                {% else %}
+                                <span class="text-xs text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="text-sm text-gray-900">{{ lead.status.value }}</span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="text-sm text-gray-600">{{ company.industry if company and company.industry else '-' }}</span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                <a href="/leads/{{ lead.id }}" class="text-blue-600 hover:text-blue-800 font-medium">View</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                No leads found. Try adjusting your filters.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if total_count > limit %}
+            <div class="bg-gray-50 px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+                <div class="text-sm text-gray-700">
+                    Showing {{ offset + 1 }} to {{ min(offset + limit, total_count) }} of {{ total_count }} results
+                </div>
+                <div class="flex space-x-2">
+                    {% if offset > 0 %}
+                    <a href="?offset={{ max(0, offset - limit) }}&limit={{ limit }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_tier %}&tier={{ selected_tier }}{% endif %}{% if min_score %}&min_score={{ min_score }}{% endif %}" class="px-3 py-1 border border-gray-300 rounded-md hover:bg-white">Previous</a>
+                    {% endif %}
+                    {% if offset + limit < total_count %}
+                    <a href="?offset={{ offset + limit }}&limit={{ limit }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_tier %}&tier={{ selected_tier }}{% endif %}{% if min_score %}&min_score={{ min_score }}{% endif %}" class="px-3 py-1 border border-gray-300 rounded-md hover:bg-white">Next</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</body>
+</html>

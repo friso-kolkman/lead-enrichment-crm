@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaigns - CRM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="{ showCreateModal: false }">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-3">
+                <div class="flex items-center space-x-8">
+                    <h1 class="text-xl font-bold text-blue-600">CRM</h1>
+                    <div class="flex space-x-1">
+                        <a href="/" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Dashboard</a>
+                        <a href="/leads" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Leads</a>
+                        <a href="/campaigns" class="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600">Campaigns</a>
+                        <a href="/analytics" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Analytics</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Campaigns</h2>
+                <p class="text-gray-600 mt-1">Manage your outbound email campaigns</p>
+            </div>
+            <button @click="showCreateModal = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                Create Campaign
+            </button>
+        </div>
+
+        <!-- Campaigns Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for campaign in campaigns %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ campaign.name }}</h3>
+                    <span class="px-2 py-1 text-xs font-medium rounded {% if campaign.is_active and not campaign.is_paused %}bg-green-100 text-green-800{% elif campaign.is_paused %}bg-yellow-100 text-yellow-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {% if campaign.is_active and not campaign.is_paused %}Active{% elif campaign.is_paused %}Paused{% else %}Inactive{% endif %}
+                    </span>
+                </div>
+
+                {% if campaign.description %}
+                <p class="text-sm text-gray-600 mb-4">{{ campaign.description }}</p>
+                {% endif %}
+
+                <!-- Stats -->
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <div class="text-2xl font-bold text-gray-900">{{ campaign.total_sent }}</div>
+                        <div class="text-xs text-gray-500">Sent</div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-green-600">{{ campaign.total_replies }}</div>
+                        <div class="text-xs text-gray-500">Replies</div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-blue-600">{{ campaign.total_opens }}</div>
+                        <div class="text-xs text-gray-500">Opens</div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-purple-600">{{ campaign.total_clicks }}</div>
+                        <div class="text-xs text-gray-500">Clicks</div>
+                    </div>
+                </div>
+
+                <!-- Targeting -->
+                <div class="mb-4 text-sm">
+                    <div class="text-gray-500 mb-1">Targeting:</div>
+                    <div class="space-y-1">
+                        {% if campaign.target_tier %}
+                        <div class="text-gray-700">• Tier: {{ campaign.target_tier.value.replace('_', ' ').title() }}</div>
+                        {% endif %}
+                        {% if campaign.min_score or campaign.max_score %}
+                        <div class="text-gray-700">• Score: {{ campaign.min_score or 0 }} - {{ campaign.max_score or 100 }}</div>
+                        {% endif %}
+                        <div class="text-gray-700">• Daily Limit: {{ campaign.daily_limit }}</div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex space-x-2">
+                    {% if campaign.is_active and not campaign.is_paused %}
+                    <button
+                        hx-post="/api/campaigns/{{ campaign.id }}/pause"
+                        hx-swap="none"
+                        hx-on::after-request="window.location.reload()"
+                        class="flex-1 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                        Pause
+                    </button>
+                    {% else %}
+                    <button
+                        hx-post="/api/campaigns/{{ campaign.id }}/activate"
+                        hx-swap="none"
+                        hx-on::after-request="window.location.reload()"
+                        class="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Activate
+                    </button>
+                    {% endif %}
+                    <button
+                        hx-post="/api/campaigns/{{ campaign.id }}/launch?limit=10&dry_run=true"
+                        hx-swap="none"
+                        class="flex-1 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                        Test
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-span-full bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
+                <p class="text-gray-600 mb-4">Create your first campaign to start reaching out to leads</p>
+                <button @click="showCreateModal = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Create Campaign
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <!-- Create Campaign Modal -->
+    <div x-show="showCreateModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="showCreateModal = false">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">Create Campaign</h2>
+                    <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <form hx-post="/api/campaigns" hx-swap="none" hx-on::after-request="window.location.reload()" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Campaign Name *</label>
+                        <input type="text" name="name" required class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea name="description" rows="3" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Target Tier</label>
+                            <select name="target_tier" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                <option value="">All Tiers</option>
+                                <option value="high_touch">High Touch</option>
+                                <option value="standard">Standard</option>
+                                <option value="nurture">Nurture</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Daily Limit</label>
+                            <input type="number" name="daily_limit" value="50" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Min Score</label>
+                            <input type="number" name="min_score" placeholder="0" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Max Score</label>
+                            <input type="number" name="max_score" placeholder="100" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Subject Template</label>
+                        <input type="text" name="email_subject_template" placeholder="{{icebreaker}} - {{company_name}}" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        <p class="mt-1 text-xs text-gray-500">Available variables: {{icebreaker}}, {{company_name}}, {{contact_name}}</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Body Template</label>
+                        <textarea name="email_body_template" rows="6" placeholder="Hi {{contact_name}},&#10;&#10;{{icebreaker}}&#10;&#10;..." class="w-full border border-gray-300 rounded-md px-3 py-2"></textarea>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" @click="showCreateModal = false" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            Create Campaign
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
