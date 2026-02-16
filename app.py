@@ -577,8 +577,18 @@ async def create_sequence(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a sequence with steps."""
+    from pydantic import ValidationError
+
     data = await request.json()
-    seq_data = SequenceCreate(**data)
+    try:
+        seq_data = SequenceCreate(**data)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
+
+    # Validate unique step numbers
+    step_numbers = [s.step_number for s in seq_data.steps]
+    if len(step_numbers) != len(set(step_numbers)):
+        raise HTTPException(status_code=422, detail="Duplicate step numbers")
 
     sequence = Sequence(
         name=seq_data.name,
