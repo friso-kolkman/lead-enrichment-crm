@@ -28,12 +28,14 @@ class Database:
     @property
     def engine(self) -> AsyncEngine:
         if self._engine is None:
-            self._engine = create_async_engine(
-                self.url,
-                echo=settings.database.echo,
-                pool_size=settings.database.pool_size,
-                pool_pre_ping=True,
-            )
+            kwargs = {
+                "echo": settings.database.echo,
+                "pool_pre_ping": True,
+            }
+            # SQLite uses StaticPool, doesn't support pool_size
+            if "sqlite" not in self.url:
+                kwargs["pool_size"] = settings.database.pool_size
+            self._engine = create_async_engine(self.url, **kwargs)
         return self._engine
 
     @property
@@ -92,53 +94,51 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def _run_migrations(engine: AsyncEngine) -> None:
-    """Run lightweight schema migrations (idempotent ALTER TABLE statements)."""
-    migrations = [
-        "ALTER TABLE contacts ADD COLUMN IF NOT EXISTS unsubscribed BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE contacts ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMP",
-        # Sequence tables
-        """CREATE TABLE IF NOT EXISTS sequences (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            description TEXT,
-            is_active BOOLEAN DEFAULT FALSE,
-            is_paused BOOLEAN DEFAULT FALSE,
-            target_tier VARCHAR(50),
-            min_score INTEGER,
-            max_score INTEGER,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
-        )""",
-        """CREATE TABLE IF NOT EXISTS sequence_steps (
-            id SERIAL PRIMARY KEY,
-            sequence_id INTEGER NOT NULL REFERENCES sequences(id),
-            step_number INTEGER NOT NULL,
-            delay_days INTEGER DEFAULT 1,
-            subject_template TEXT NOT NULL,
-            body_template TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE (sequence_id, step_number)
-        )""",
-        """CREATE TABLE IF NOT EXISTS sequence_enrollments (
-            id SERIAL PRIMARY KEY,
-            lead_id INTEGER NOT NULL REFERENCES leads(id),
-            sequence_id INTEGER NOT NULL REFERENCES sequences(id),
-            current_step INTEGER DEFAULT 0,
-            status VARCHAR(50) DEFAULT 'active',
-            enrolled_at TIMESTAMP DEFAULT NOW(),
-            last_step_sent_at TIMESTAMP,
-            next_send_at TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE (lead_id, sequence_id)
-        )""",
+    """Run lightweight schema migrations (idempotent).
+
+    Tables are created by Base.metadata.create_all above, so these migrations
+    only handle ALTER TABLE for columns added after initial schema.
+    PostgreSQL supports IF NOT EXISTS; SQLite doesn't, so we catch errors.
+    """
+    from sqlalchemy import text, inspect
+
+    is_sqlite = "sqlite" in str(engine.url)
+
+    # ALTER TABLE migrations (columns added post-launch)
+    alter_migrations = [
+        ("contacts", "unsubscribed", "ALTER TABLE contacts ADD COLUMN unsubscribed BOOLEAN DEFAULT FALSE"),
+        ("contacts", "unsubscribed_at", "ALTER TABLE contacts ADD COLUMN unsubscribed_at TIMESTAMP"),
+    ]
+
+    # Index migrations (work on both SQLite and PostgreSQL)
+    index_migrations = [
         "CREATE INDEX IF NOT EXISTS ix_sequences_is_active ON sequences(is_active)",
         "CREATE INDEX IF NOT EXISTS ix_sequence_steps_sequence_id ON sequence_steps(sequence_id)",
         "CREATE INDEX IF NOT EXISTS ix_enrollments_status_next_send ON sequence_enrollments(status, next_send_at)",
         "CREATE INDEX IF NOT EXISTS ix_enrollments_lead_id ON sequence_enrollments(lead_id)",
     ]
+
     async with engine.begin() as conn:
-        for sql in migrations:
-            await conn.execute(__import__("sqlalchemy").text(sql))
+        # Run ALTER TABLE migrations with column-existence check
+        for table, column, sql in alter_migrations:
+            try:
+                # Check if column already exists
+                result = await conn.run_sync(
+                    lambda sync_conn: inspect(sync_conn).get_columns(table)
+                )
+                existing_cols = {c["name"] for c in result}
+                if column not in existing_cols:
+                    await conn.execute(text(sql))
+            except Exception:
+                pass  # Column already exists or table doesn't exist yet
+
+        # Run index migrations
+        for sql in index_migrations:
+            try:
+                await conn.execute(text(sql))
+            except Exception:
+                pass  # Index already exists
+
     logger.info("Schema migrations applied")
 
 

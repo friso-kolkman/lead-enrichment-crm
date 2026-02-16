@@ -668,7 +668,6 @@ async def enroll_leads_api(
             .join(Contact, Lead.contact_id == Contact.id)
             .where(
                 Lead.contact_id.isnot(None),
-                Lead.status.in_([LeadStatus.READY, LeadStatus.SYNCED, LeadStatus.CONTACTED]),
                 Contact.unsubscribed == False,
                 Contact.email_status != EmailStatus.INVALID,
             )
