@@ -25,7 +25,11 @@
                         <a href="/" class="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600">Dashboard</a>
                         <a href="/leads" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Leads</a>
                         <a href="/campaigns" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Campaigns</a>
-                        <a href="/analytics" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Analytics</a>
+                        <a href="/sequences" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Sequences</a>
+                        <a href="/ai-lead-finder" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 flex items-center space-x-1">
+                            <span>✨</span>
+                            <span>AI Lead Finder</span>
+                        </a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -178,28 +182,58 @@
         </div>
 
         <!-- Quick Actions -->
-        <div class="mt-6 bg-white rounded-lg shadow p-4">
+        <div class="mt-6 bg-white rounded-lg shadow p-4" x-data="{ message: '', messageType: '' }">
             <h3 class="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
+
+            <!-- Status Message -->
+            <div x-show="message" x-cloak class="mb-4 p-3 rounded-lg" :class="{'bg-green-100 text-green-800': messageType === 'success', 'bg-red-100 text-red-800': messageType === 'error', 'bg-blue-100 text-blue-800': messageType === 'info'}">
+                <span x-text="message"></span>
+            </div>
+
             <div class="flex flex-wrap gap-3">
                 <button
                     hx-post="/api/pipeline/run?start_stage=1&end_stage=5&limit=100"
-                    hx-swap="none"
-                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    hx-indicator="#loading-1"
+                    hx-on::before-request="message = 'Running enrichment...'; messageType = 'info'"
+                    hx-on::after-request="if(event.detail.successful) { message = 'Enrichment completed!'; messageType = 'success'; setTimeout(() => location.reload(), 2000); } else { message = 'Error: ' + event.detail.xhr.statusText; messageType = 'error'; }"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors relative"
                 >
+                    <span id="loading-1" class="htmx-indicator absolute inset-0 flex items-center justify-center bg-blue-600 rounded-lg">
+                        <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
                     Run Enrichment (1-5)
                 </button>
                 <button
                     hx-post="/api/pipeline/run?start_stage=6&end_stage=7&limit=50"
-                    hx-swap="none"
-                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    hx-indicator="#loading-2"
+                    hx-on::before-request="message = 'Running AI research...'; messageType = 'info'"
+                    hx-on::after-request="if(event.detail.successful) { message = 'AI research completed!'; messageType = 'success'; setTimeout(() => location.reload(), 2000); } else { message = 'Error: ' + event.detail.xhr.statusText; messageType = 'error'; }"
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors relative"
                 >
+                    <span id="loading-2" class="htmx-indicator absolute inset-0 flex items-center justify-center bg-purple-600 rounded-lg">
+                        <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
                     Run AI Research (6-7)
                 </button>
                 <button
                     hx-post="/api/pipeline/run?start_stage=8&end_stage=8&limit=100"
-                    hx-swap="none"
-                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    hx-indicator="#loading-3"
+                    hx-on::before-request="message = 'Syncing to CRM...'; messageType = 'info'"
+                    hx-on::after-request="if(event.detail.successful) { message = 'CRM sync completed!'; messageType = 'success'; setTimeout(() => location.reload(), 2000); } else { message = 'Error: ' + event.detail.xhr.statusText; messageType = 'error'; }"
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors relative"
                 >
+                    <span id="loading-3" class="htmx-indicator absolute inset-0 flex items-center justify-center bg-green-600 rounded-lg">
+                        <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
                     Sync to CRM (8)
                 </button>
                 <a
@@ -210,7 +244,68 @@
                     Export Leads (JSON)
                 </a>
             </div>
+
+            <!-- AI Lead Finder CTA -->
+            <div class="mt-6 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
+                <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0 text-4xl">✨</div>
+                    <div class="flex-1">
+                        <h4 class="text-lg font-bold text-gray-900 mb-2">AI Lead Finder</h4>
+                        <p class="text-sm text-gray-700 mb-4">Tell me what you're looking for and I'll find the perfect leads for you. Just describe your ideal customer in plain English!</p>
+                        <a href="/ai-lead-finder" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                            <span>Start Finding Leads</span>
+                            <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import Leads Section -->
+            <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">Or import/create manually</h4>
+                <div class="flex gap-2">
+                    <button
+                        onclick="document.getElementById('csv-upload').click()"
+                        class="px-3 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                    >
+                        Import CSV
+                    </button>
+                    <button
+                        hx-post="/api/demo/create-sample-leads"
+                        hx-on::before-request="message = 'Creating sample leads...'; messageType = 'info'"
+                        hx-on::after-request="if(event.detail.successful) { message = 'Sample leads created!'; messageType = 'success'; setTimeout(() => location.reload(), 1500); } else { message = 'Error creating sample leads'; messageType = 'error'; }"
+                        class="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        Create Sample Data
+                    </button>
+                </div>
+                <input type="file" id="csv-upload" class="hidden" accept=".csv" onchange="uploadCSV(this)">
+            </div>
         </div>
+
+        <script>
+            function uploadCSV(input) {
+                if (input.files && input.files[0]) {
+                    const formData = new FormData();
+                    formData.append('file', input.files[0]);
+
+                    fetch('/api/upload-csv', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert('CSV uploaded successfully! ' + data.count + ' leads imported.');
+                        location.reload();
+                    })
+                    .catch(error => {
+                        alert('Error uploading CSV: ' + error);
+                    });
+                }
+            }
+        </script>
     </main>
 
     <footer class="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-gray-500">

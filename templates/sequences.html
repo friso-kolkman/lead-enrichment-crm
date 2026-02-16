@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequences - CRM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="sequencePage()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-3">
+                <div class="flex items-center space-x-8">
+                    <h1 class="text-xl font-bold text-blue-600">CRM</h1>
+                    <div class="flex space-x-1">
+                        <a href="/" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Dashboard</a>
+                        <a href="/leads" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Leads</a>
+                        <a href="/campaigns" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Campaigns</a>
+                        <a href="/sequences" class="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600">Sequences</a>
+                        <a href="/ai-lead-finder" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">AI Lead Finder</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Sequences</h2>
+                <p class="text-gray-600 mt-1">Automated multi-step follow-up emails</p>
+            </div>
+            <button @click="showCreateModal = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                Create Sequence
+            </button>
+        </div>
+
+        <!-- Sequences Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for sequence in sequences %}
+            {% set stats = seq_stats[sequence.id] %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex justify-between items-start mb-3">
+                    <h3 class="text-lg font-semibold text-gray-900">{{ sequence.name }}</h3>
+                    <span class="px-2 py-1 text-xs font-medium rounded {% if sequence.is_active and not sequence.is_paused %}bg-green-100 text-green-800{% elif sequence.is_paused %}bg-yellow-100 text-yellow-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {% if sequence.is_active and not sequence.is_paused %}Active{% elif sequence.is_paused %}Paused{% else %}Inactive{% endif %}
+                    </span>
+                </div>
+
+                {% if sequence.description %}
+                <p class="text-sm text-gray-600 mb-3">{{ sequence.description }}</p>
+                {% endif %}
+
+                <!-- Steps summary -->
+                <div class="mb-3 text-sm text-gray-500">
+                    {{ sequence.steps | length }} steps
+                    {% if sequence.steps %}
+                    &middot;
+                    {% set total_days = namespace(val=0) %}
+                    {% for step in sequence.steps %}
+                        {% set total_days.val = total_days.val + step.delay_days %}
+                    {% endfor %}
+                    {{ total_days.val }} days total
+                    {% endif %}
+                </div>
+
+                <!-- Stats -->
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div>
+                        <div class="text-xl font-bold text-gray-900">{{ stats.total }}</div>
+                        <div class="text-xs text-gray-500">Enrolled</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-blue-600">{{ stats.active }}</div>
+                        <div class="text-xs text-gray-500">Active</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-green-600">{{ stats.replied }}</div>
+                        <div class="text-xs text-gray-500">Replied</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-gray-600">{{ stats.completed }}</div>
+                        <div class="text-xs text-gray-500">Completed</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-red-600">{{ stats.bounced }}</div>
+                        <div class="text-xs text-gray-500">Bounced</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-orange-600">{{ stats.unsubscribed }}</div>
+                        <div class="text-xs text-gray-500">Unsub</div>
+                    </div>
+                </div>
+
+                <!-- Targeting -->
+                {% if sequence.target_tier or sequence.min_score or sequence.max_score %}
+                <div class="mb-4 text-sm">
+                    <div class="text-gray-500 mb-1">Targeting:</div>
+                    <div class="space-y-1">
+                        {% if sequence.target_tier %}
+                        <div class="text-gray-700">Tier: {{ sequence.target_tier.value.replace('_', ' ').title() }}</div>
+                        {% endif %}
+                        {% if sequence.min_score or sequence.max_score %}
+                        <div class="text-gray-700">Score: {{ sequence.min_score or 0 }} - {{ sequence.max_score or 100 }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Actions -->
+                <div class="flex space-x-2">
+                    {% if sequence.is_active and not sequence.is_paused %}
+                    <button
+                        hx-post="/api/sequences/{{ sequence.id }}/pause"
+                        hx-swap="none"
+                        hx-on::after-request="window.location.reload()"
+                        class="flex-1 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                        Pause
+                    </button>
+                    {% else %}
+                    <button
+                        hx-post="/api/sequences/{{ sequence.id }}/activate"
+                        hx-swap="none"
+                        hx-on::after-request="window.location.reload()"
+                        class="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Activate
+                    </button>
+                    {% endif %}
+                    <button
+                        @click="openEnrollModal({{ sequence.id }}, {{ sequence.name | tojson }})"
+                        class="flex-1 px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700">
+                        Enroll
+                    </button>
+                    <button
+                        hx-post="/api/sequences/process"
+                        hx-swap="none"
+                        hx-on::after-request="window.location.reload()"
+                        class="px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                        title="Trigger processor now">
+                        Run
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-span-full bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No sequences yet</h3>
+                <p class="text-gray-600 mb-4">Create your first follow-up sequence to automate outreach</p>
+                <button @click="showCreateModal = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Create Sequence
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <!-- Create Sequence Modal -->
+    <div x-show="showCreateModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="showCreateModal = false">
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">Create Sequence</h2>
+                    <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <form @submit.prevent="createSequence()" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Sequence Name *</label>
+                        <input type="text" x-model="form.name" required class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea x-model="form.description" rows="2" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Target Tier</label>
+                            <select x-model="form.target_tier" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                <option value="">All Tiers</option>
+                                <option value="high_touch">High Touch</option>
+                                <option value="standard">Standard</option>
+                                <option value="nurture">Nurture</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Min Score</label>
+                            <input type="number" x-model.number="form.min_score" placeholder="0" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Max Score</label>
+                            <input type="number" x-model.number="form.max_score" placeholder="100" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                    </div>
+
+                    <!-- Steps Builder -->
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <label class="block text-sm font-medium text-gray-700">Steps *</label>
+                            <button type="button" @click="addStep()" class="text-sm text-blue-600 hover:text-blue-800">+ Add Step</button>
+                        </div>
+
+                        <template x-for="(step, index) in form.steps" :key="index">
+                            <div class="border border-gray-200 rounded-lg p-4 mb-3 bg-gray-50">
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-sm font-medium text-gray-700" x-text="'Step ' + step.step_number"></span>
+                                    <div class="flex items-center space-x-3">
+                                        <label class="text-xs text-gray-500">
+                                            Wait
+                                            <input type="number" x-model.number="step.delay_days" min="0" class="w-14 mx-1 border border-gray-300 rounded px-2 py-1 text-sm">
+                                            days
+                                        </label>
+                                        <button type="button" @click="removeStep(index)" x-show="form.steps.length > 1" class="text-red-400 hover:text-red-600">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <input type="text" x-model="step.subject_template" placeholder="Subject line..." class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <textarea x-model="step.body_template" rows="4" placeholder="Email body... Use {first_name} and {company_name} for personalization" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" @click="showCreateModal = false" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" :disabled="creating">
+                            <span x-show="!creating">Create Sequence</span>
+                            <span x-show="creating">Creating...</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enroll Modal -->
+    <div x-show="showEnrollModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="showEnrollModal = false">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-900">Enroll Leads</h2>
+                    <button @click="showEnrollModal = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <p class="text-sm text-gray-600 mb-4">Enroll leads into <span class="font-medium" x-text="enrollSequenceName"></span></p>
+
+                <form @submit.prevent="enrollLeads()" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Target Tier</label>
+                            <select x-model="enrollForm.target_tier" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                <option value="">All Tiers</option>
+                                <option value="high_touch">High Touch</option>
+                                <option value="standard">Standard</option>
+                                <option value="nurture">Nurture</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Limit</label>
+                            <input type="number" x-model.number="enrollForm.limit" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Min Score</label>
+                            <input type="number" x-model.number="enrollForm.min_score" placeholder="0" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Max Score</label>
+                            <input type="number" x-model.number="enrollForm.max_score" placeholder="100" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                    </div>
+
+                    <!-- Result message -->
+                    <div x-show="enrollResult" class="p-3 rounded-md text-sm" :class="enrollResult?.enrolled > 0 ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'">
+                        <span x-text="enrollResult?.enrolled + ' leads enrolled'"></span>
+                        <span x-show="enrollResult?.skipped > 0" x-text="', ' + enrollResult?.skipped + ' skipped'"></span>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-2">
+                        <button type="button" @click="showEnrollModal = false" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                            Close
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700" :disabled="enrolling">
+                            <span x-show="!enrolling">Enroll Leads</span>
+                            <span x-show="enrolling">Enrolling...</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function sequencePage() {
+        return {
+            showCreateModal: false,
+            showEnrollModal: false,
+            creating: false,
+            enrolling: false,
+            enrollSequenceId: null,
+            enrollSequenceName: '',
+            enrollResult: null,
+            form: {
+                name: '',
+                description: '',
+                target_tier: '',
+                min_score: null,
+                max_score: null,
+                steps: [
+                    { step_number: 1, delay_days: 0, subject_template: '', body_template: '' },
+                    { step_number: 2, delay_days: 3, subject_template: '', body_template: '' },
+                    { step_number: 3, delay_days: 5, subject_template: '', body_template: '' },
+                ]
+            },
+            enrollForm: {
+                target_tier: '',
+                min_score: null,
+                max_score: null,
+                limit: 50,
+            },
+
+            addStep() {
+                const nextNum = this.form.steps.length + 1;
+                this.form.steps.push({
+                    step_number: nextNum,
+                    delay_days: 3,
+                    subject_template: '',
+                    body_template: '',
+                });
+            },
+
+            removeStep(index) {
+                this.form.steps.splice(index, 1);
+                // Renumber steps
+                this.form.steps.forEach((step, i) => step.step_number = i + 1);
+            },
+
+            async createSequence() {
+                this.creating = true;
+                try {
+                    const payload = {
+                        name: this.form.name,
+                        description: this.form.description || null,
+                        target_tier: this.form.target_tier || null,
+                        min_score: this.form.min_score || null,
+                        max_score: this.form.max_score || null,
+                        steps: this.form.steps.filter(s => s.subject_template && s.body_template),
+                    };
+                    const resp = await fetch('/api/sequences', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    if (resp.ok) {
+                        window.location.reload();
+                    } else {
+                        const err = await resp.json();
+                        alert('Error: ' + (err.detail || JSON.stringify(err)));
+                    }
+                } finally {
+                    this.creating = false;
+                }
+            },
+
+            openEnrollModal(seqId, seqName) {
+                this.enrollSequenceId = seqId;
+                this.enrollSequenceName = seqName;
+                this.enrollResult = null;
+                this.showEnrollModal = true;
+            },
+
+            async enrollLeads() {
+                this.enrolling = true;
+                this.enrollResult = null;
+                try {
+                    const payload = {
+                        target_tier: this.enrollForm.target_tier || null,
+                        min_score: this.enrollForm.min_score || null,
+                        max_score: this.enrollForm.max_score || null,
+                        limit: this.enrollForm.limit,
+                    };
+                    const resp = await fetch(`/api/sequences/${this.enrollSequenceId}/enroll`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    this.enrollResult = await resp.json();
+                } finally {
+                    this.enrolling = false;
+                }
+            },
+        }
+    }
+    </script>
+</body>
+</html>

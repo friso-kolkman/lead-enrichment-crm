@@ -58,6 +58,7 @@ class ResendClient:
         cc: list[str] | None = None,
         bcc: list[str] | None = None,
         tags: list[dict[str, str]] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """
         Send an email via Resend.
@@ -104,6 +105,8 @@ class ResendClient:
             payload["bcc"] = bcc
         if tags:
             payload["tags"] = tags
+        if headers:
+            payload["headers"] = headers
 
         try:
             response = await self.client.post("/emails", json=payload)

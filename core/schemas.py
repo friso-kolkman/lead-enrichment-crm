@@ -331,3 +331,78 @@ class EmailSendResult(BaseModel):
     success: bool
     message_id: Optional[str] = None
     error: Optional[str] = None
+
+
+# --- Sequence schemas ---
+
+
+class SequenceStepCreate(BaseModel):
+    """Schema for creating a sequence step."""
+
+    step_number: int = Field(ge=1)
+    delay_days: int = Field(ge=0, default=1)
+    subject_template: str
+    body_template: str
+
+
+class SequenceStepResponse(BaseModel):
+    """Schema for sequence step response."""
+
+    id: int
+    step_number: int
+    delay_days: int
+    subject_template: str
+    body_template: str
+
+    model_config = {"from_attributes": True}
+
+
+class SequenceCreate(BaseModel):
+    """Schema for creating a sequence with steps."""
+
+    name: str
+    description: Optional[str] = None
+    target_tier: Optional[str] = None
+    min_score: Optional[int] = None
+    max_score: Optional[int] = None
+    steps: list[SequenceStepCreate] = Field(min_length=1)
+
+
+class SequenceResponse(BaseModel):
+    """Schema for sequence response."""
+
+    id: int
+    name: str
+    description: Optional[str] = None
+    target_tier: Optional[str] = None
+    is_active: bool
+    is_paused: bool
+    steps: list[SequenceStepResponse] = []
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SequenceEnrollmentResponse(BaseModel):
+    """Schema for enrollment response."""
+
+    id: int
+    lead_id: int
+    sequence_id: int
+    current_step: int
+    status: str
+    enrolled_at: datetime
+    last_step_sent_at: Optional[datetime] = None
+    next_send_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class SequenceEnrollRequest(BaseModel):
+    """Schema for enrolling leads into a sequence."""
+
+    lead_ids: Optional[list[int]] = None
+    target_tier: Optional[str] = None
+    min_score: Optional[int] = None
+    max_score: Optional[int] = None
+    limit: int = 50

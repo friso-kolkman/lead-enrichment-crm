@@ -171,7 +171,12 @@ class ResendConfig(BaseModel):
     api_key: str = ""
     from_email: str = "noreply@example.com"
     from_name: str = "Your Name"
+    reply_to_email: str = ""  # Where replies go (important for deliverability)
     daily_limit: int = 100  # Free tier limit
+    # CAN-SPAM required: physical address in footer
+    company_name: str = ""
+    company_address: str = ""  # e.g. "123 Main St, City, Country"
+    unsubscribe_url: str = ""  # Base URL for unsubscribe links
 
 
 class AttioConfig(BaseModel):
@@ -271,6 +276,12 @@ class Settings(BaseSettings):
             ),
             resend=ResendConfig(
                 api_key=os.getenv("RESEND_API_KEY", ""),
+                from_email=os.getenv("RESEND_FROM_EMAIL", "noreply@example.com"),
+                from_name=os.getenv("RESEND_FROM_NAME", "Your Name"),
+                reply_to_email=os.getenv("RESEND_REPLY_TO", ""),
+                company_name=os.getenv("COMPANY_NAME", ""),
+                company_address=os.getenv("COMPANY_ADDRESS", ""),
+                unsubscribe_url=os.getenv("UNSUBSCRIBE_BASE_URL", ""),
             ),
             attio=AttioConfig(
                 api_key=os.getenv("ATTIO_API_KEY", ""),

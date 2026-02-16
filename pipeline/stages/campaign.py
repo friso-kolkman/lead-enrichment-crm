@@ -1,17 +1,29 @@
 """Stage 9: Campaign launch via Resend email."""
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from core.models import Campaign, Company, Contact, Lead, LeadStatus, LeadTier
 from core.schemas import EmailSendRequest, EmailSendResult
 from integrations.resend import ResendClient, resend_client
 
 logger = logging.getLogger(__name__)
+
+
+async def get_today_send_count(session: AsyncSession) -> int:
+    """Get total emails sent today across all campaigns."""
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    result = await session.execute(
+        select(func.count(Lead.id)).where(
+            Lead.last_email_sent >= today_start,
+        )
+    )
+    return result.scalar_one()
 
 
 async def send_lead_email(
@@ -51,6 +63,13 @@ async def send_lead_email(
         return EmailSendResult(
             success=False,
             error="No contact email found",
+        )
+
+    # Skip unsubscribed contacts
+    if contact.unsubscribed:
+        return EmailSendResult(
+            success=False,
+            error="Contact has unsubscribed",
         )
 
     # Load company if needed
@@ -98,12 +117,34 @@ async def send_lead_email(
         )
 
     try:
-        # Send via Resend
+        # Build HTML body with unsubscribe footer
+        html_body = body.replace("\n", "<br>")
+        unsub_url = settings.resend.unsubscribe_url
+        company_name = settings.resend.company_name
+        company_addr = settings.resend.company_address
+        if unsub_url:
+            unsub_link = f"{unsub_url}?email={contact.email}"
+            footer = (
+                '<br><br><div style="color:#999;font-size:11px;border-top:1px solid #eee;padding-top:8px;margin-top:16px">'
+                f'{company_name}<br>{company_addr}<br>'
+                f'<a href="{unsub_link}" style="color:#999">Unsubscribe</a>'
+                '</div>'
+            )
+            html_body += footer
+
+        # Build headers — List-Unsubscribe improves deliverability
+        email_headers = {}
+        if unsub_url:
+            email_headers["List-Unsubscribe"] = f"<{unsub_link}>"
+            email_headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
+        reply_to = settings.resend.reply_to_email or None
         result = await resend_client.send_email(
             to_email=contact.email,
             subject=subject,
-            html_body=body.replace("\n", "<br>"),
-            reply_to=None,
+            html_body=html_body,
+            reply_to=reply_to,
+            headers=email_headers if email_headers else None,
         )
 
         if result.get("id"):
@@ -169,11 +210,26 @@ async def launch_campaign(
     if campaign.is_paused:
         return {"error": "Campaign is paused"}
 
-    # Build lead query
-    query = select(Lead).where(
-        Lead.contact_id.isnot(None),
-        Lead.email_variants.isnot(None),
-        Lead.status.in_([LeadStatus.READY, LeadStatus.SYNCED]),
+    # Enforce global daily limit (Resend free tier = 100/day)
+    global_daily_limit = settings.resend.daily_limit
+    sent_today = await get_today_send_count(session)
+    if sent_today >= global_daily_limit:
+        return {"error": f"Global daily limit reached ({sent_today}/{global_daily_limit})"}
+
+    # Build lead query — exclude already contacted, unsubscribed, and bounced
+    from core.models import EmailStatus
+
+    query = (
+        select(Lead)
+        .join(Contact, Lead.contact_id == Contact.id)
+        .where(
+            Lead.contact_id.isnot(None),
+            Lead.email_variants.isnot(None),
+            Lead.status.in_([LeadStatus.READY, LeadStatus.SYNCED]),
+            Lead.emails_sent == 0,
+            Contact.unsubscribed == False,
+            Contact.email_status != EmailStatus.INVALID,
+        )
     )
 
     # Apply campaign filters
@@ -184,8 +240,10 @@ async def launch_campaign(
     if campaign.max_score:
         query = query.where(Lead.total_score <= campaign.max_score)
 
-    # Apply limit
+    # Apply limit — respect both campaign and global daily cap
     send_limit = limit or campaign.daily_limit
+    remaining_global = global_daily_limit - sent_today
+    send_limit = min(send_limit, remaining_global)
     query = query.limit(send_limit)
 
     result = await session.execute(query)

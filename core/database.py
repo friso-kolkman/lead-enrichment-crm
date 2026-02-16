@@ -91,9 +91,61 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+async def _run_migrations(engine: AsyncEngine) -> None:
+    """Run lightweight schema migrations (idempotent ALTER TABLE statements)."""
+    migrations = [
+        "ALTER TABLE contacts ADD COLUMN IF NOT EXISTS unsubscribed BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE contacts ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMP",
+        # Sequence tables
+        """CREATE TABLE IF NOT EXISTS sequences (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            is_active BOOLEAN DEFAULT FALSE,
+            is_paused BOOLEAN DEFAULT FALSE,
+            target_tier VARCHAR(50),
+            min_score INTEGER,
+            max_score INTEGER,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS sequence_steps (
+            id SERIAL PRIMARY KEY,
+            sequence_id INTEGER NOT NULL REFERENCES sequences(id),
+            step_number INTEGER NOT NULL,
+            delay_days INTEGER DEFAULT 1,
+            subject_template TEXT NOT NULL,
+            body_template TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE (sequence_id, step_number)
+        )""",
+        """CREATE TABLE IF NOT EXISTS sequence_enrollments (
+            id SERIAL PRIMARY KEY,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            sequence_id INTEGER NOT NULL REFERENCES sequences(id),
+            current_step INTEGER DEFAULT 0,
+            status VARCHAR(50) DEFAULT 'active',
+            enrolled_at TIMESTAMP DEFAULT NOW(),
+            last_step_sent_at TIMESTAMP,
+            next_send_at TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE (lead_id, sequence_id)
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_sequences_is_active ON sequences(is_active)",
+        "CREATE INDEX IF NOT EXISTS ix_sequence_steps_sequence_id ON sequence_steps(sequence_id)",
+        "CREATE INDEX IF NOT EXISTS ix_enrollments_status_next_send ON sequence_enrollments(status, next_send_at)",
+        "CREATE INDEX IF NOT EXISTS ix_enrollments_lead_id ON sequence_enrollments(lead_id)",
+    ]
+    async with engine.begin() as conn:
+        for sql in migrations:
+            await conn.execute(__import__("sqlalchemy").text(sql))
+    logger.info("Schema migrations applied")
+
+
 async def init_db() -> None:
     """Initialize database (create tables if needed)."""
     await db.create_tables()
+    await _run_migrations(db.engine)
 
 
 async def close_db() -> None:

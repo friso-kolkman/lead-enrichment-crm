@@ -13,11 +13,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -58,6 +58,17 @@ class EmailStatus(str, PyEnum):
     UNKNOWN = "unknown"
 
 
+class SequenceStatus(str, PyEnum):
+    """Sequence enrollment status."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    REPLIED = "replied"
+    BOUNCED = "bounced"
+    UNSUBSCRIBED = "unsubscribed"
+
+
 class Company(Base):
     """Company model with firmographics and technographics."""
 
@@ -90,14 +101,14 @@ class Company(Base):
     funding_stage: Mapped[Optional[str]] = mapped_column(String(50))
 
     # Technographics
-    tech_stack: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    tech_stack: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     crm_platform: Mapped[Optional[str]] = mapped_column(String(100))
     marketing_automation: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Signals
     is_hiring: Mapped[bool] = mapped_column(Boolean, default=False)
     open_positions: Mapped[Optional[int]] = mapped_column(Integer)
-    hiring_departments: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
+    hiring_departments: Mapped[Optional[list]] = mapped_column(JSON, default=list)
 
     # Social
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(500))
@@ -106,8 +117,8 @@ class Company(Base):
 
     # Metadata
     enriched_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    enrichment_sources: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
-    raw_data: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    enrichment_sources: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    raw_data: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -152,14 +163,18 @@ class Contact(Base):
     mobile_phone: Mapped[Optional[str]] = mapped_column(String(50))
     work_phone: Mapped[Optional[str]] = mapped_column(String(50))
 
+    # Opt-out
+    unsubscribed: Mapped[bool] = mapped_column(Boolean, default=False)
+    unsubscribed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
     # Social
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(500))
     twitter_url: Mapped[Optional[str]] = mapped_column(String(500))
 
     # Metadata
     enriched_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    enrichment_sources: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
-    raw_data: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    enrichment_sources: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    raw_data: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -194,19 +209,19 @@ class Lead(Base):
 
     # Scoring
     total_score: Mapped[Optional[int]] = mapped_column(Integer)
-    score_breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    score_breakdown: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     icp_fit_score: Mapped[Optional[int]] = mapped_column(Integer)
     intent_score: Mapped[Optional[int]] = mapped_column(Integer)
 
     # AI Research
     research_summary: Mapped[Optional[str]] = mapped_column(Text)
-    kpis: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
-    trigger_events: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
-    linkedin_posts: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
+    kpis: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    trigger_events: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    linkedin_posts: Mapped[Optional[list]] = mapped_column(JSON, default=list)
 
     # Generated content
-    icebreakers: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
-    email_variants: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    icebreakers: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    email_variants: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     linkedin_message: Mapped[Optional[str]] = mapped_column(Text)
 
     # CRM sync
@@ -256,17 +271,17 @@ class Campaign(Base):
     target_tier: Mapped[Optional[LeadTier]] = mapped_column(Enum(LeadTier))
     min_score: Mapped[Optional[int]] = mapped_column(Integer)
     max_score: Mapped[Optional[int]] = mapped_column(Integer)
-    filters: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    filters: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
 
     # Templates
     email_subject_template: Mapped[Optional[str]] = mapped_column(Text)
     email_body_template: Mapped[Optional[str]] = mapped_column(Text)
-    email_variants: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    email_variants: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
 
     # Schedule
     start_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    send_times: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
+    send_times: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     timezone: Mapped[str] = mapped_column(String(50), default="UTC")
 
     # Limits
@@ -311,12 +326,12 @@ class EnrichmentLog(Base):
     entity_id: Mapped[Optional[int]] = mapped_column(Integer)
 
     # Request details
-    request_params: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    request_params: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
 
     # Response
     success: Mapped[bool] = mapped_column(Boolean, default=False)
     status_code: Mapped[Optional[int]] = mapped_column(Integer)
-    response_data: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    response_data: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     error_message: Mapped[Optional[str]] = mapped_column(Text)
 
     # Cost
@@ -359,4 +374,99 @@ class CostSummary(Base):
     __table_args__ = (
         UniqueConstraint("provider", "year", "month", name="uq_cost_summary_period"),
         Index("ix_cost_summaries_period", "year", "month"),
+    )
+
+
+class Sequence(Base):
+    """Multi-step email sequence definition."""
+
+    __tablename__ = "sequences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Status
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Targeting (reuses Campaign pattern)
+    target_tier: Mapped[Optional[LeadTier]] = mapped_column(Enum(LeadTier))
+    min_score: Mapped[Optional[int]] = mapped_column(Integer)
+    max_score: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    steps: Mapped[list["SequenceStep"]] = relationship(
+        "SequenceStep", back_populates="sequence", order_by="SequenceStep.step_number"
+    )
+    enrollments: Mapped[list["SequenceEnrollment"]] = relationship(
+        "SequenceEnrollment", back_populates="sequence"
+    )
+
+    __table_args__ = (Index("ix_sequences_is_active", "is_active"),)
+
+
+class SequenceStep(Base):
+    """Single step in a sequence (email template + delay)."""
+
+    __tablename__ = "sequence_steps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sequence_id: Mapped[int] = mapped_column(ForeignKey("sequences.id"), nullable=False)
+    step_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    delay_days: Mapped[int] = mapped_column(Integer, default=1)
+    subject_template: Mapped[str] = mapped_column(Text, nullable=False)
+    body_template: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    sequence: Mapped["Sequence"] = relationship("Sequence", back_populates="steps")
+
+    __table_args__ = (
+        UniqueConstraint("sequence_id", "step_number", name="uq_sequence_step"),
+        Index("ix_sequence_steps_sequence_id", "sequence_id"),
+    )
+
+
+class SequenceEnrollment(Base):
+    """Tracks a lead's progress through a sequence."""
+
+    __tablename__ = "sequence_enrollments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lead_id: Mapped[int] = mapped_column(ForeignKey("leads.id"), nullable=False)
+    sequence_id: Mapped[int] = mapped_column(ForeignKey("sequences.id"), nullable=False)
+
+    # Progress
+    current_step: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[SequenceStatus] = mapped_column(
+        Enum(SequenceStatus), default=SequenceStatus.ACTIVE
+    )
+
+    # Timing
+    enrolled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_step_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    next_send_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    # Metadata
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    lead: Mapped["Lead"] = relationship("Lead")
+    sequence: Mapped["Sequence"] = relationship("Sequence", back_populates="enrollments")
+
+    __table_args__ = (
+        UniqueConstraint("lead_id", "sequence_id", name="uq_enrollment_lead_sequence"),
+        Index("ix_enrollments_status_next_send", "status", "next_send_at"),
+        Index("ix_enrollments_lead_id", "lead_id"),
     )
