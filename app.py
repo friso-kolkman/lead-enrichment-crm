@@ -1092,30 +1092,19 @@ Be natural and conversational. Extract information intelligently."""
 
     except Exception as e:
         logger.error(f"AI chat error: {str(e)}")
-        # Fallback to basic response
+        # Fallback to keyword-based conversation
         updated_context = update_context_from_message(user_message, context)
         has_industry = bool(updated_context.get("industry"))
-        has_size = bool(updated_context.get("company_size"))
-        has_location = bool(updated_context.get("location"))
+        has_size = bool(updated_context.get("company_size") or updated_context.get("min_employees"))
+        has_location = bool(updated_context.get("location") or updated_context.get("countries"))
+        ready = has_industry and has_size and has_location
 
-        if has_industry and has_size and has_location:
-            return {
-                "message": f"Perfect! I have enough information. Let me search for {updated_context.get('industry')} companies in {updated_context.get('location')} with {updated_context.get('company_size')} employees!",
-                "context": updated_context,
-                "ready_to_search": True
-            }
-        elif has_industry:
-            return {
-                "message": f"Got it - {updated_context.get('industry')} industry! What's your target company size and location?",
-                "context": updated_context,
-                "ready_to_search": False
-            }
-        else:
-            return {
-                "message": "I'd love to help you find leads! What industry are you targeting?",
-                "context": updated_context,
-                "ready_to_search": False
-            }
+        message = await generate_lead_finder_response(user_message, updated_context, ready)
+        return {
+            "message": message,
+            "context": updated_context,
+            "ready_to_search": ready,
+        }
 
 
 async def generate_lead_finder_response(message: str, context: dict, ready: bool) -> str:
@@ -1127,8 +1116,8 @@ async def generate_lead_finder_response(message: str, context: dict, ready: bool
     has_size = bool(context.get("company_size") or context.get("min_employees"))
     has_location = bool(context.get("location") or context.get("countries"))
 
-    # If ready to search
-    if ready or (has_industry and (has_size or has_location)):
+    # If ready to search (all 3 criteria gathered)
+    if ready:
         industry_str = context.get("industry", "companies in your target sector")
         size_str = f"with {context.get('company_size', '1-50 employees')}" if context.get("company_size") else ""
         location_str = f"in {context.get('location', 'your target location')}" if context.get("location") else ""
